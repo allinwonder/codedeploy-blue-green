@@ -33,7 +33,7 @@ Mappings:
     ap-southeast-1:
       ubuntu: ami-0c5199d385b432989
     ap-southeast-2:
-      ubuntu: ami-07a3bd4944eb120a0
+      ubuntu: ami-02d7e25c1cfdd5695
     ca-central-1:
       ubuntu: ami-0427e8367e3770df1
     eu-central-1:
@@ -83,6 +83,10 @@ Parameters:
     MaxLength: 15
     MinLength: 2
     Type: String
+  InstanceType:
+    Type: String
+    Description: Instance Type for the Quick Start
+    Default: t2.micro
 
 Resources:
 
@@ -162,6 +166,7 @@ Resources:
 
   PublicSubnetRtb:
     Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: VpcInternetGatewayAttachment
     Properties:
       RouteTableId: !Ref VpcRouteTable
       SubnetId: !Ref PublicSubnet
@@ -190,7 +195,7 @@ Resources:
       Tags:
       - Key: Name
         Value:
-          !Join ["", [ Ref: NamePrefix, "-deploy-bucket"] ]
+          !Join ["", [ Ref: NamePrefix, "-deploy-bucket-", Ref: "AWS::Region" ] ]
 
 # BlueGreenWorkStationRole - The instance role for the workstation host
 #
@@ -214,8 +219,9 @@ Resources:
         Version: '2012-10-17'
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies: 
-      - PolicyName: "root"
+      - PolicyName: "additionalPermissions"
         PolicyDocument: 
           Version: "2012-10-17"
           Statement: 
@@ -259,12 +265,7 @@ Resources:
   BlueGreenWorkStationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH access via port 22
-      SecurityGroupIngress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: '22'
-        IpProtocol: tcp
-        ToPort: '22'
+      GroupDescription: WorkStationSecurityGroup
       Tags:
       - Key: Name
         Value:
@@ -304,7 +305,7 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.BlueGreenLaunchConfig.Metadata.AWS::CloudFormation::Init
+                path=Resources.BlueGreenWorkStation.Metadata.AWS::CloudFormation::Init
                 action=/usr/local/bin/cfn-init -v -s ${AWS::StackId} -r BlueGreenWorkStation --region ${AWS::Region}
                 runas=root
               group: root
@@ -446,8 +447,8 @@ Resources:
         - RegionMap
         - Ref: AWS::Region
         - ubuntu
-      InstanceType: t2.micro
-      KeyName: !Ref BlueGreenKeyPairName
+      InstanceType: 
+        Ref: InstanceType
       SecurityGroupIds: 
       - Ref: BlueGreenWorkStationSecurityGroup
       SubnetId: !Ref PublicSubnet
@@ -469,6 +470,8 @@ Resources:
           pip install awscli
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
           ln -s /root/aws-cfn-bootstrap-latest/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
+          snap install amazon-ssm-agent --classic
+          snap start amazon-ssm-agent
           cfn-init --region ${AWS::Region} -s ${AWS::StackId} -r BlueGreenWorkStation
           sudo -u ubuntu aws configure set region ${AWS::Region} 
           sudo -u ubuntu /home/ubuntu/scripts/updatedeploymentgroup.sh
@@ -519,7 +522,20 @@ Resources:
             - ec2.amazonaws.com
         Version: '2012-10-17'
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy 
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies: 
+      - PolicyName: "additionalPermissions"
+        PolicyDocument: 
+          Version: "2012-10-17"
+          Statement: 
+          - Effect: "Allow"
+            Action: 
+            -  cloudformation:DescribeStackResource
+            -  cloudformation:DescribeStackResources
+            -  cloudformation:DescribeStacks
+            -  cloudformation:SignalResource
+            Resource: "*"      
 
 # BlueGreenLB
 #
@@ -594,10 +610,6 @@ Resources:
     Properties:
       GroupDescription: Enable access to web servers
       SecurityGroupIngress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: '22'
-        IpProtocol: tcp
-        ToPort: '22'
       - CidrIp: 0.0.0.0/0
         FromPort: '80'
         IpProtocol: tcp
@@ -700,7 +712,7 @@ Resources:
               php: []
           services:
             sysvinit:
-              httpd:
+              apache2:
                 enabled: true
                 ensureRunning: true
     Properties:
@@ -710,8 +722,8 @@ Resources:
         - RegionMap
         - Ref: AWS::Region
         - ubuntu
-      InstanceType: t2.micro
-      KeyName: !Ref BlueGreenKeyPairName
+      InstanceType:
+        Ref: InstanceType
       SecurityGroups:
       - Ref: BlueGreenWebSecurityGroup
       UserData:
@@ -729,6 +741,8 @@ Resources:
           pip install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
           ln -s /root/aws-cfn-bootstrap-latest/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
 
+          snap install amazon-ssm-agent --classic
+          snap start amazon-ssm-agent
           # Install the version of Ruby currently supported with CodeDeploy agent.
           
           cat << EOF > /etc/apt/sources.list.d/xenial.list
@@ -749,7 +763,7 @@ Resources:
           apt-get -y update
           apt-get -y install ruby gdebi-core 
           
-          cfn-init --region ${AWS::Region} -s ${AWS::StackId} -r BlueGreenLaunchConfig
+          cfn-init --region ${AWS::Region} -s ${AWS::StackName} -r BlueGreenLaunchConfig --role ${BlueGreenInstanceRole}
           cfn-hup || error_exit ''Failed to start cfn-hup''
           cfn-signal -e 0 -r 'BlueGreen configuration' --stack ${AWS::StackId} --resource BlueGreenASG --region ${AWS::Region}
           
