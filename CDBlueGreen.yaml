@@ -27,29 +27,29 @@ Description: Create the VPC framework for the Ubuntu BlueGreen environment.
 Mappings:
   RegionMap:
     ap-northeast-1:
-      ubuntu: ami-07ad4b1c3af1ea214
+      ubuntu: ami-03344c819e1ac354d
     ap-northeast-2:
-      ubuntu: ami-06e7b9c5e0c4dd014
+      ubuntu: ami-0c5a717974f63b04c
     ap-southeast-1:
-      ubuntu: ami-0c5199d385b432989
+      ubuntu: ami-0ca13b3dabeb6c66d
     ap-southeast-2:
       ubuntu: ami-02d7e25c1cfdd5695
     ca-central-1:
-      ubuntu: ami-0427e8367e3770df1
+      ubuntu: ami-0f06e521718460abf
     eu-central-1:
-      ubuntu: ami-0bdf93799014acdc4
+      ubuntu: ami-03d8059563982d7b0
     eu-west-1:
-      ubuntu: ami-00035f41c82244dab
+      ubuntu: ami-0f630a3f40b1eb0b8
     eu-west-2:
-      ubuntu: ami-0b0a60c0a2bd40612
+      ubuntu: ami-0a590332f9f499197
     us-east-1:
-      ubuntu: ami-0ac019f4fcb7cb7e6
+      ubuntu: ami-08bc77a2c7eb2b1da
     us-east-2:
-      ubuntu: ami-0f65671a86f061fcd
+      ubuntu: ami-08cec7c429219e339
     us-west-1:
-      ubuntu: ami-063aa838bd7631e0b
+      ubuntu: ami-094f0176b0d009d9f
     us-west-2:
-      ubuntu: ami-0bbe6b35405ecebdb
+      ubuntu: ami-02d0ea44ae3fe9561
 
 # Offer the IP of the workstation host so the template user can log in.
 
